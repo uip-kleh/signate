@@ -8,7 +8,7 @@ from sklearn.metrics import log_loss, accuracy_score, confusion_matrix
 from sklearn.model_selection import KFold
 from xgboost import XGBClassifier
 
-
+# 二値分類
 class BinaryClass:
     competitionID = 0
     home_path = os.environ['HOME']
@@ -28,32 +28,38 @@ class BinaryClass:
     f1_score = None
 
     def __init__(self) -> None:
-        pd.set_option('display.max_columns', 100)
+        pd.set_option('display.max_columns', 100)   # DataFrame全表示
 
+    # competitionIDの取得
     def get_competitionID(self, competitionID):
         self.competitionID = competitionID
         self.data_path = os.path.join(self.signate_path, str(competitionID))
 
+    # 使用するデータの読み込み
     def load(self, na_values):
         train_path = os.path.join(self.data_path, 'train.csv')
         test_path = os.path.join(self.data_path, 'test.csv')
         self.train_csv = pd.read_csv(train_path, na_values=na_values)
         self.test_csv = pd.read_csv(test_path, na_values=na_values)
 
+    # データの基本統計量の表示
     def describe(self):
         print("========== train ==========")
         print(self.train_csv.describe())
         print("========== test ==========")
         print(self.test_csv.describe())
 
+    # 学習データをデータとラベルに分割する
     def split_labels(self, label_name):
         self.train_data = self.train_csv.drop([label_name], axis=1)
         self.train_labels = self.train_csv[label_name]
 
+    # 不要なコラムの削除
     def drop_columns(self, columns):
         self.train_data = self.train_data.drop(columns, axis=1)
         self.test_data = self.test_csv.drop(columns, axis=1)
 
+    # データの値を標準化
     def standardization(self):
         scaler = StandardScaler()
         scaler.fit(self.train_data)
@@ -61,6 +67,7 @@ class BinaryClass:
         self.test_data = scaler.transform(self.test_data)
         print(type(self.train_data))
 
+    # グリッドサーチ
     def tune_hyper(self):
         param_space = {
             'max_depth': [3, 5, 7],
@@ -80,6 +87,7 @@ class BinaryClass:
         self.best_min_child_weight = params[best_idx][1]
         self.best_label_threshold = params[best_idx][2]
 
+    # 交差検証
     def cross_val(self, max_depth, min_child_weight, label_threshold=.5):
         scores_accuracy = []
         scores_logloss = []
@@ -106,7 +114,8 @@ class BinaryClass:
         print("LOGLOSS:", logloss, "ACCURACY: ", accuracy)
         return logloss, accuracy
 
-    def draw_heatmap(self, test_labels, prediction_labels):
+    # 混同行列の出力
+    def draw_confusion_matrix(self, test_labels, prediction_labels):
         cm = confusion_matrix(test_labels, prediction_labels)
         regularized_cm = cm.astype('float')
         size = len(set(test_labels))
@@ -131,6 +140,7 @@ class BinaryClass:
         plt.tight_layout()
         #plt.show()
 
+    # 訓練データの学習
     def train(self):
         self.model = XGBClassifier(
             n_estimators=20, random_state=71,
@@ -140,6 +150,7 @@ class BinaryClass:
         self.pred = self.model.predict_proba(self.test_data)[:, 1]
         self.pred_label = np.where(self.pred > self.best_label_threshold, 1, 0)
 
+    # 提出ファイルの作成
     def submit(self, index, label_name):
         submission_file = os.path.join('submission', str(self.competitionID) + '.csv')
         os.system('touch ' + submission_file)
