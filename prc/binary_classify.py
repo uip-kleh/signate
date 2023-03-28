@@ -4,9 +4,11 @@ from common.tools import BinaryClass
 
 if __name__ == '__main__':
     binaryclass = BinaryClass()
-    binaryclass.get_competitionID()  # competitionIDの指定
+    binaryclass.get_competitionID()     # competitionIDの指定
     na_values = ['', 'NA', -1, 9999]    # 欠損値一覧
     binaryclass.load(na_values)         # 欠損値を指定してデータ読込
+    binaryclass.show_na_val()           # 欠損値の個数確認
+    # binaryclass.fill_na_value(columns, na_val, val) #欠損値の値を指定して埋める
     # binaryclass.describe()            # 統計値の出力
     binaryclass.split_labels('Outcome') # データとラベルに分ける
     columns = ['index']                 # 削除したいコラム

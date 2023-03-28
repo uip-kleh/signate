@@ -21,7 +21,7 @@ class BinaryClass:
     test_data = None
     best_max_depth = None
     best_min_child_weight = None
-    best_label_threshold = None
+    best_label_threshold = .5
     model = None
     pred = None
     pred_label = None
@@ -41,6 +41,19 @@ class BinaryClass:
         test_path = os.path.join(self.data_path, 'test.csv')
         self.train_csv = pd.read_csv(train_path, na_values=na_values)
         self.test_csv = pd.read_csv(test_path, na_values=na_values)
+
+    # 欠損値の個数確認
+    def show_na_val(self):
+        print("========== train ==========")
+        print(self.train_csv.count())
+        print("========== test ==========")
+        print(self.test_csv.count())
+
+    # 欠損値を特定の値で埋める
+    def fill_na_value(self, columns, na_val, val=0):
+        for column in columns:
+            self.train_data[column] = self.train_data[column].replace(na_val, val)
+            self.test_data[column] = self.test_data[column].replace(na_val, val)
 
     # データの基本統計量の表示
     def describe(self):
