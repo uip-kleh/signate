@@ -2,10 +2,12 @@ import os
 import pandas as pd
 import numpy as np
 import matplotlib.pylab as plt
+from pylab import rcParams
 import itertools
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, PowerTransformer, LabelEncoder
 from sklearn.metrics import log_loss, accuracy_score, confusion_matrix
 from sklearn.model_selection import KFold
+import xgboost as xgb
 from xgboost import XGBClassifier
 
 # 二値分類
@@ -50,10 +52,8 @@ class BinaryClass:
         print(self.test_csv.count())
 
     # 欠損値を特定の値で埋める
-    def fill_na_value(self, columns, na_val, val=0):
-        for column in columns:
-            self.train_data[column] = self.train_data[column].replace(na_val, val)
-            self.test_data[column] = self.test_data[column].replace(na_val, val)
+    def fill_na_value(self, set_na):
+        self.train_csv.fillna(set_na)
 
     # データの基本統計量の表示
     def describe(self):
@@ -61,6 +61,16 @@ class BinaryClass:
         print(self.train_csv.describe())
         print("========== test ==========")
         print(self.test_csv.describe())
+
+    # 各Columnに対してヒストグラムを作成する
+    def draw_hist(self, fname='hist.pdf'):
+        rcParams['figure.figsize'] = 10, 10
+        self.train_data.hist()
+        plt.tight_layout()
+        save_name = os.path.join('images', fname)
+        plt.savefig(save_name, transparent=True)
+        plt.close()
+        plt.clf()
 
     # 学習データをデータとラベルに分割する
     def split_labels(self, label_name):
@@ -72,20 +82,61 @@ class BinaryClass:
         self.train_data = self.train_data.drop(columns, axis=1)
         self.test_data = self.test_csv.drop(columns, axis=1)
 
+    # 外れ値を置き換える
+    def clipping(self, columns):
+        p01 = self.train_data[columns].quantile(0.01)
+        p99 = self.train_data[columns].quantile(0.99)
+        self.train_data = self.train_data[columns].clip(p01, p99, axis=1)
+        self.test_data = self.test_data[columns].clip(p01, p99, axis=1)
+
     # データの値を標準化
-    def standardization(self):
+    def standardization(self, columns):
         scaler = StandardScaler()
-        scaler.fit(self.train_data)
-        self.train_data = scaler.transform(self.train_data)
-        self.test_data = scaler.transform(self.test_data)
-        print(type(self.train_data))
+        scaler.fit(self.train_data[columns])
+        self.train_data[columns] = scaler.transform(self.train_data[columns])
+        self.test_data[columns] = scaler.transform(self.test_data[columns])
+
+    # データの値をMin-Maxスケーリング
+    def minmax_scaling(self, columns):
+        scaler = MinMaxScaler()
+        scaler.fit(self.train_data[columns])
+        self.train_data[columns] = scaler.transform(self.train_data[columns])
+        self.test_data[columns] = scaler.transform(self.test_data[columns])
+
+    # 正の値のみ変換可能
+    def box_cox(self, columns):
+        pt = PowerTransformer(method='box-cox')
+        pt.fit(self.train_csv[columns])
+        self.train_data[columns] = pt.transform(self.train_data[columns])
+        self.test_data[columns] = pt.transform(self.test_data[columns])
+
+    # 有理数において変換可能
+    def yeo_johnson(self, columns):
+        pt = PowerTransformer(method='yeo-johnson')
+        pt.fit(self.train_data[columns])
+        self.train_data[columns] = pt.transform(self.train_data[columns])
+        self.test_data[columns] = pt.transform(self.test_data[columns])
+
+    # ラベルエンコーディング
+    def label_encoding(self, columns):
+        for column in columns:
+            le = LabelEncoder()
+            le.fit(self.train_data[column])
+            self.train_data = le.transform(self.train_data[column])
+            self.test_data = le.transform(self.test_data[column])
+
+    # # frequency encoding
+    # def frequency_encoding(self, columns):
+    #     for column in columns:
+    #         freq = self.train_data[column].value_counts()
+    #         train_x
 
     # グリッドサーチ
     def tune_hyper(self):
         param_space = {
-            'max_depth': [3, 5, 7],
-            'min_child_widht': [1.8, 2.0, 4.8],
-            'label_threshold': [i * 0.1 for i in range(10)]
+            'max_depth': [7, 9, 11],
+            'min_child_widht': [0, 5, 15, 300],
+            'label_threshold': [i * 0.1 + .3 for i in range(5)]
         }
         param_combinations = itertools.product(param_space['max_depth'], param_space['min_child_widht'], param_space['label_threshold'])
         params = []
@@ -106,8 +157,8 @@ class BinaryClass:
         scores_logloss = []
         kf = KFold(n_splits=4, shuffle=True, random_state=71)
         for tr_idx, va_idx in kf.split(self.train_data):
-            tr_x, va_x = self.train_data[tr_idx], self.train_data[va_idx]
-            tr_y, va_y = self.train_labels[tr_idx], self.train_labels[va_idx]
+            tr_x, va_x = self.train_data.iloc[tr_idx], self.train_data.iloc[va_idx]
+            tr_y, va_y = self.train_labels.iloc[tr_idx], self.train_labels.iloc[va_idx]
 
             model = XGBClassifier(
                 n_estimators=20, random_state=71,
@@ -157,7 +208,8 @@ class BinaryClass:
     def train(self):
         self.model = XGBClassifier(
             n_estimators=20, random_state=71,
-            max_depth=self.best_max_depth, min_child_weight=self.best_min_child_weight
+            max_depth=self.best_max_depth, min_child_weight=self.best_min_child_weight,
+            learning_rate = 0.3
         )
         self.model.fit(self.train_data, self.train_labels)
         self.pred = self.model.predict_proba(self.test_data)[:, 1]
